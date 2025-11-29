@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>浪浪山小画师</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- 样式配置 (保持不变) --- */
+        :root {
+            --primary-color: #ff7043;
+            --secondary-color: #8d6e63;
+            --bg-gradient: linear-gradient(135deg, #fff1eb 0%, #ace0f9 100%);
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --font-main: 'ZCOOL KuaiLe', cursive, sans-serif;
+        }
+
+        body { 
+            margin: 0; padding: 0; overflow: hidden; 
+            background-image: var(--bg-gradient); 
+            font-family: var(--font-main); 
+            user-select: none; -webkit-user-select: none;
+        }
+
+        #app { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+
+        .btn {
+            background: linear-gradient(45deg, #ff7043, #ffca28);
+            border: none; border-radius: 50px;
+            color: white; font-family: var(--font-main);
+            font-size: 24px; padding: 12px 30px;
+            cursor: pointer; box-shadow: 0 4px 15px rgba(255, 112, 67, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-icon { margin-right: 10px; font-size: 28px; }
+
+        /* 欢迎页封面 */
+        .screen-welcome {
+            position: absolute; inset: 0; z-index: 100;
+            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+            padding-bottom: 80px;
+            /* 确保 cover.jpg 在文件夹里 */
+            background: url('cover.jpg') no-repeat center center;
+            background-size: cover;
+        }
+        .screen-welcome::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.2) 60%, rgba(255,255,255,0.9) 100%);
+            pointer-events: none;
+        }
+
+        .logo-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(5px);
+            padding: 30px 60px; border-radius: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center; border: 3px solid #fff;
+            animation: popIn 0.8s ease-out;
+            position: relative; z-index: 10;
+        }
+        .app-title { font-size: 60px; color: #5d4037; margin: 0; text-shadow: 3px 3px 0 #fff; }
+        .app-subtitle { font-size: 28px; color: #795548; margin-top: 5px; margin-bottom: 25px; }
+
+        .screen-map {
+            position: absolute; inset: 0; z-index: 90;
+            padding: 40px; overflow-y: auto;
+            display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 30px;
+        }
+        .level-card {
+            width: 130px; height: 150px;
+            background: var(--card-bg); border-radius: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; transition: all 0.3s; border: 3px solid transparent;
+        }
+        .level-card.locked { opacity: 0.6; filter: grayscale(1); pointer-events: none; }
+        .level-card.unlocked { border-color: #ffca28; cursor: pointer; background: #fff; transform: translateY(-5px); }
+        .level-num { 
+            width: 40px; height: 40px; background: #ff7043; color: white; 
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-weight: bold; margin-bottom: 10px;
+            box-shadow: 0 3px 8px rgba(255, 112, 67, 0.3);
+        }
+        .level-name { font-size: 16px; color: #5d4037; text-align: center; padding: 0 5px;}
+        .level-stars { font-size: 12px; margin-top: 5px; color: #ffca28; }
+
+        .modal-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.6); z-index: 200;
+            display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .story-book {
+            width: 650px; height: 450px; background: #fffbf0;
+            border-radius: 20px; border: 8px solid #8d6e63;
+            display: flex; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            animation: bookOpen 0.6s ease-out;
+            position: relative;
+        }
+        .story-left {
+            width: 40%; background: #ffe0b2; 
+            display: flex; justify-content: center; align-items: center; font-size: 80px;
+            background-size: cover; background-position: center;
+        }
+        .story-right {
+            width: 60%; padding: 30px; display: flex; flex-direction: column; justify-content: center;
+        }
+        .story-text { font-size: 22px; line-height: 1.5; color: #5d4037; margin-bottom: 20px; white-space: pre-wrap;}
+        
+        .screen-game { position: absolute; inset: 0; z-index: 80; background: #fdfbf7; }
+        .game-header {
+            position: absolute; top: 0; left: 0; right: 0; height: 80px;
+            padding: 0 30px; display: flex; justify-content: space-between; align-items: center;
+            z-index: 50; pointer-events: none;
+        }
+        .game-header > * { pointer-events: auto; }
+        
+        #container { position: absolute; inset: 0; z-index: 10; touch-action: none; }
+        
+        .guide-layer {
+            position: absolute; inset: 0; z-index: 5; 
+            display: flex; justify-content: center; align-items: center; pointer-events: none;
+        }
+        
+        .guide-svg { width: 90%; height: 90%; fill: none; stroke: #ccc; stroke-width: 24; stroke-linecap: round; stroke-linejoin: round; }
+        
+        .guide-image {
+            max-width: 80%; max-height: 80%;
+            opacity: 0.3; filter: grayscale(100%); border: 2px dashed #ccc;
+        }
+
+        .stamp-modal {
+            position: absolute; inset: 0; z-index: 300;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(255,255,255,0.95);
+            animation: fadeIn 0.3s;
+        }
+        .stamp {
+            width: 200px; height: 200px; border: 8px solid #d32f2f; border-radius: 50%;
+            color: #d32f2f; display: flex; justify-content: center; align-items: center;
+            font-size: 40px; font-weight: bold; transform: rotate(-15deg) scale(0);
+            animation: stampIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            background: rgba(211, 47, 47, 0.05); text-transform: uppercase;
+        }
+
+        /* 朗读按钮 */
+        .speak-btn {
+            background: none; border: 2px solid #ff7043; color: #ff7043;
+            border-radius: 20px; padding: 5px 15px; cursor: pointer;
+            margin-bottom: 10px; align-self: flex-start;
+        }
+
+        @keyframes popIn { 0% {transform: scale(0.8); opacity: 0;} 100% {transform: scale(1); opacity: 1;} }
+        @keyframes bookOpen { from {transform: perspective(1000px) rotateY(90deg); opacity: 0;} to {transform: perspective(1000px) rotateY(0); opacity: 1;} }
+        @keyframes stampIn { to {transform: rotate(-15deg) scale(1);} }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    
+    <!-- 1. 欢迎页 -->
+    <div v-if="state === 'welcome'" class="screen-welcome">
+        <div class="logo-card">
+            <h1 class="app-title">浪浪山小画师</h1>
+            <div class="app-subtitle">夏天专属 · 语音故事版</div>
+            <button class="btn" @click="enterMap">
+                <span class="btn-icon">🎨</span> 进山学艺
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. 地图页 -->
+    <div v-if="state === 'map'" class="screen-map">
+        <div v-for="(level, idx) in levels" :key="idx" 
+             class="level-card" 
+             :class="{locked: idx > maxLevel, unlocked: idx <= maxLevel}"
+             @click="openStory(idx)">
+            <div class="level-num">{{ idx + 1 }}</div>
+            <div class="level-name">{{ level.title }}</div>
+            <div class="level-stars" v-if="idx < maxLevel">⭐⭐⭐</div>
+        </div>
+    </div>
+
+    <!-- 3. 剧情弹窗 -->
+    <div v-if="showStory" class="modal-overlay">
+        <div class="story-book">
+            <div class="story-left" 
+                 :style="currentLevel.type === 'image' ? {backgroundImage: 'url('+currentLevel.src+')'} : {}">
+                 <span v-if="currentLevel.type !== 'image'">{{ currentLevel.icon }}</span>
+            </div>
+            <div class="story-right">
+                <h2 style="color: #ff7043; margin: 0; margin-bottom: 10px;">{{ currentLevel.title }}</h2>
+                <button class="speak-btn" @click="readStory">🔊 再读一遍</button>
+                <p class="story-text">{{ currentLevel.story }}</p>
+                <button class="btn" @click="startGame">开始挑战 💪</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 游戏页 -->
+    <div v-if="state === 'game'" class="screen-game">
+        <div class="game-header">
+            <button class="btn" style="padding: 8px 20px; font-size: 18px; background: #eee; color: #555;" @click="state='map'">↩ 返回</button>
+            <div style="font-size: 24px; color: #8d6e63;">{{ currentLevel.title }}</div>
+            <button class="btn" style="background: linear-gradient(45deg, #43a047, #66bb6a);" @click="finishLevel">✨ 画好了</button>
+        </div>
+
+        <div class="guide-layer">
+            <svg v-if="currentLevel.type === 'svg'" class="guide-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                <path :d="currentLevel.path" />
+            </svg>
+            <img v-if="currentLevel.type === 'image'" :src="currentLevel.src" class="guide-image">
+        </div>
+
+        <div id="container"></div>
+    </div>
+
+    <!-- 5. 结算印章 -->
+    <div v-if="showResult" class="stamp-modal" @click="closeResult">
+        <div class="stamp" :style="{borderColor: resultColor, color: resultColor}">
+            {{ resultGrade }}
+        </div>
+        <p style="font-size: 24px; color: #555; margin-top: 20px;">点击继续...</p>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            const state = ref('welcome');
+            const showStory = ref(false);
+            const showResult = ref(false);
+            const maxLevel = ref(0); 
+            const activeIdx = ref(0);
+            const resultGrade = ref('');
+            const resultColor = ref('red');
+            let stage, layer, currentLine;
+            let isDrawing = false;
+            let drawCount = 0; 
+
+            // --- 语音合成引擎 ---
+            const speakText = (text) => {
+                if ('speechSynthesis' in window) {
+                    // 停止之前的
+                    window.speechSynthesis.cancel();
+                    const msg = new SpeechSynthesisUtterance();
+                    msg.text = text;
+                    msg.lang = 'zh-CN'; // 强制中文
+                    msg.rate = 0.9; // 语速稍慢，适合孩子
+                    window.speechSynthesis.speak(msg);
+                }
+            };
+
+            // --- 关卡配置 (包含完整剧本) ---
+            const levels = [
+                // L1
+                { type: 'svg', title: "补铁锅", icon: "🍳", path: "M400 150 A 150 150 0 1 1 399 150 Z",
+                  story: "熊教头大吼一声：‘那个叫夏天的！你看小猪妖把锅都刷漏了！今晚大王喝不到汤就惨了！快画一个圆圆的铁片补上！’" },
+                // L2
+                { type: 'svg', title: "擀面杖", icon: "🥖", path: "M100 300 L700 300",
+                  story: "猪妈妈温柔地说：‘是夏天大王吗？我想给小猪妖做肉包子，可是没有擀面杖。你能帮我画一根直直的棍子吗？’" },
+                // L3
+                { type: 'svg', title: "下山路", icon: "⛰️", path: "M100 100 L300 100 L100 300 L300 300 L100 500 L300 500",
+                  story: "小猪妖喘着气说：‘哎哟！浪浪山太陡了，我只能滚下去啦！夏天大王，快帮我画一条弯弯曲曲的路，让我滑下去！’" },
+                // L4
+                { type: 'svg', title: "吹泡泡", icon: "🫧", path: "M250 300 A 50 50 0 1 1 249 300 Z M550 300 A 100 100 0 1 1 549 300 Z",
+                  story: "蛤蟆精懒洋洋地说：‘呱！我才不去砍柴呢。夏天，我们来比赛吹泡泡吧！我吹个大的，你画个小的！’" },
+                
+                // L5
+                { type: 'svg', title: "数果子", icon: "1️⃣", path: "M150 200 L150 400 M350 200 Q450 150 450 250 Q450 350 300 400 L450 400 M620 200 H 700 L 650 300 Q 720 300 720 400 Q 720 500 620 500",
+                  story: "小猪妖挠挠头：‘一、二、三...哎呀数乱了！夏天大王，帮我把 1、2、3 这三个数字工整地写下来吧！’" },
+                // L6
+                { type: 'svg', title: "点名册", icon: "4️⃣", path: "M150 150 L100 300 L250 300 M200 150 L200 400 M450 150 L350 150 L350 250 Q500 250 500 400 Q500 550 350 500 M650 150 Q550 350 550 450 Q550 550 700 550 Q800 550 800 450 Q800 350 650 350",
+                  story: "熊教头大喊：‘集合！怎么少了几个？夏天！快帮我把 4、5、6 记在考勤册上！字要写大一点！’" },
+                
+                // L7
+                { type: 'svg', title: "大圣代", icon: "🍦", path: "M350 400 L400 550 L450 400 M370 400 L400 500 M430 400 L400 500 M380 400 L360 450 M420 400 L440 450 M340 400 Q400 350 460 400 M340 400 Q320 300 400 300 Q480 300 460 400 M360 300 Q350 220 400 220 Q450 220 440 300 M400 220 L400 200 M400 200 A 15 15 0 1 1 399 200",
+                  story: "小猪妖流着口水：‘浪浪山太热了。听说人类有种叫冰淇淋的好吃的？夏天大王，我要三层奶油，还要加个樱桃！’" },
+                // L8
+                { type: 'svg', title: "祥瑞云", icon: "☁️", path: "M200 300 Q200 200 300 200 Q300 150 400 150 Q500 150 500 200 Q600 200 600 300 Q600 400 500 400 Q500 450 400 450 Q300 450 300 400 Q200 400 200 300 M300 200 Q350 250 300 300 M400 150 Q450 200 400 250 M600 300 Q700 300 800 200",
+                  story: "小猪妖望着天空：‘哇，那是大圣的筋斗云吗？夏天，我们也画一朵像棉花糖一样的云，带我们飞出浪浪山吧！’" },
+
+                // --- 临摹关卡 (需图片) ---
+                { type: 'image', title: "蛤蟆大哥", src: "level9.jpg", 
+                  story: "小猪妖介绍说：‘这是我的好朋友蛤蟆大哥。虽然他只有一只眼睛看着我们，嘴巴也大大的，但他很讲义气！快画下来！’" },
+                { type: 'image', title: "黄先生", src: "level10.jpg", 
+                  story: "小猪妖悄悄说：‘嘘——这是黄鼠狼先生，山里最有学问的。你看他戴着头巾，还有长长的胡子，多神气呀！’" },
+                { type: 'image', title: "小猪妖", src: "level11.jpg", 
+                  story: "小猪妖开心大笑：‘嘿嘿，终于轮到画我啦！我是浪浪山的小钻风。夏天大王，记得把我的招风耳画大一点哦！’" },
+                { type: 'image', title: "齐天大圣", src: "level12.jpg", 
+                  story: "激动人心的时刻！‘天哪... 是他！真的是他！齐天大圣孙悟空！夏天，快把大圣的样子记下来！画出他的金箍和长长的翎毛！’" }
+            ];
+
+            const currentLevel = computed(() => levels[activeIdx.value]);
+
+            const enterMap = () => { 
+                state.value = 'map'; 
+                // 第一次交互后，语音引擎通常就准备好了
+                speakText("夏天大王，请选择任务！");
+            };
+
+            const openStory = (idx) => {
+                if(idx > maxLevel.value) return; 
+                activeIdx.value = idx;
+                showStory.value = true;
+                // 打开弹窗，自动朗读剧情
+                speakText(levels[idx].story);
+            };
+
+            const readStory = () => {
+                speakText(levels[activeIdx.value].story);
+            }
+
+            const startGame = () => {
+                window.speechSynthesis.cancel(); // 停止朗读
+                showStory.value = false;
+                state.value = 'game';
+                drawCount = 0; 
+                nextTick(initCanvas);
+            };
+
+            const finishLevel = () => {
+                let grade = '';
+                let color = '';
+                
+                if (drawCount < 30) {
+                    alert("夏天还没怎么画呢，再多画两笔？");
+                    return;
+                } else if (drawCount < 100) {
+                    grade = "Well Done"; color = "#2196f3";
+                } else if (drawCount < 200) {
+                    grade = "Excellent"; color = "#9c27b0";
+                } else {
+                    grade = "Perfect!"; color = "#d32f2f";
+                }
+
+                resultGrade.value = grade;
+                resultColor.value = color;
+                showResult.value = true;
+                
+                if (['Well Done', 'Excellent', 'Perfect!'].includes(grade)) {
+                    fireConfetti();
+                    speakText("太棒了！通关啦！"); // 通关语音
+                    if (activeIdx.value === maxLevel.value && maxLevel.value < levels.length - 1) {
+                        maxLevel.value++;
+                    }
+                }
+            };
+
+            const fireConfetti = () => {
+                var duration = 2 * 1000;
+                var animationEnd = Date.now() + duration;
+                var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 999 };
+                var random = (min, max) => Math.random() * (max - min) + min;
+                var interval = setInterval(function() {
+                    var timeLeft = animationEnd - Date.now();
+                    if (timeLeft <= 0) return clearInterval(interval);
+                    var particleCount = 50 * (timeLeft / duration);
+                    confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.1, 0.3), y: Math.random() - 0.2 } }));
+                    confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.7, 0.9), y: Math.random() - 0.2 } }));
+                }, 250);
+            };
+
+            const closeResult = () => {
+                showResult.value = false;
+                state.value = 'map';
+            };
+
+            const initCanvas = () => {
+                if(stage) stage.destroy();
+                stage = new Konva.Stage({
+                    container: 'container',
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                });
+                layer = new Konva.Layer();
+                stage.add(layer);
+
+                stage.on('mousedown touchstart', () => {
+                    isDrawing = true;
+                    const pos = stage.getPointerPosition();
+                    currentLine = new Konva.Line({
+                        stroke: '#5d4037', strokeWidth: 12, 
+                        globalCompositeOperation: 'source-over',
+                        points: [pos.x, pos.y],
+                        lineCap: 'round', lineJoin: 'round', tension: 0.5
+                    });
+                    layer.add(currentLine);
+                });
+
+                stage.on('mousemove touchmove', (e) => {
+                    if (!isDrawing) return;
+                    e.evt.preventDefault();
+                    const pos = stage.getPointerPosition();
+                    const newPoints = currentLine.points().concat([pos.x, pos.y]);
+                    currentLine.points(newPoints);
+                    drawCount++;
+                });
+
+                stage.on('mouseup touchend', () => { isDrawing = false; });
+            };
+
+            return {
+                state, levels, maxLevel, currentLevel,
+                showStory, showResult, resultGrade, resultColor,
+                enterMap, openStory, startGame, finishLevel, closeResult, readStory
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
